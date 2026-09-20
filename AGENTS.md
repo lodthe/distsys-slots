@@ -41,7 +41,7 @@ Paths below are relative to the repository root. Backend files are in `internal/
 | `internal/app/web/` | Frontend assets, embedded in the Go binary by `static.go`. |
 | `docs/openapi.json` | API contract; update it when changing the API. |
 | `internal/app/*_test.go`, `tests/` | Go, browser and end-to-end tests. |
-| `compose.yaml`, `deploy/` | Deployment, HTTPS, persistent logs and backups. |
+| `compose.yaml`, `deploy/` | Deployment, HTTPS, Docker logging and backups. |
 
 ## Behavior to preserve
 
@@ -85,7 +85,6 @@ command syntax and `git diff --check`; a full test run is unnecessary.
 | `TEST_DATABASE_URL='postgres://USER:PASSWORD@HOST:5432/TEST_DB?sslmode=disable' make check` | Database and backend behavior; replace the URL with a dedicated test database. |
 | `make browser-check` | Frontend tests using Chromium and a mocked API, without external network access. |
 | `make e2e-check` | Real backend, PostgreSQL and browser in disposable containers. |
-| `make logs-check` | Persistent log storage, container replacement and graceful shutdown. |
 | `make security-check` | Publication, dependency or configuration changes; secret and vulnerability scanning. |
 
 Without `TEST_DATABASE_URL`, Go database tests are **skipped**. Do not report
@@ -100,13 +99,19 @@ element or request rather than fixed delays or `networkidle`.
 
 ## Containers, data and secrets
 
-- Compose stores the database, logs and backups in named Docker volumes.
+- Compose stores the database and backups in named Docker volumes.
   No host UID/GID settings or manual directory permissions are needed.
-  Keep the application running as its built-in non-root user; the image prepares
-  `/logs` so a fresh volume is writable by that user.
+  Keep the application running as its built-in non-root user.
+- Logs use Docker's `journald` driver, which requires systemd journal on the
+  Docker host. View current container logs with `docker compose logs`; use
+  `sudo journalctl CONTAINER_NAME=distsys-slots-app-1` for historical app logs
+  with the default Compose project name. Journal retention is controlled by
+  the host, independently of container removal. Persistence across host reboots
+  requires persistent journal storage. Do not change host journal settings
+  without a deployment task, or reintroduce log wrappers and dedicated volumes.
 - `docker compose down` preserves volumes; `down -v` deletes them. Never use
   volume deletion against the live deployment as part of testing.
-- Existing host directories `backups/` and `logs/` may contain older data.
+- Existing host directories and old log volumes may contain historical data.
   Do not delete them or silently move their contents.
 - The workspace may contain a live `.env`, and the host may run the application.
   Use isolated containers and databases for checks. `make up` and the root

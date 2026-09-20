@@ -1,4 +1,4 @@
-.PHONY: check test browser-check logs-check e2e-check security-check up
+.PHONY: check test browser-check e2e-check security-check up
 check: bin/staticcheck
 	test -z "$$(gofmt -l cmd internal)"
 	go vet ./...
@@ -14,9 +14,6 @@ up:
 browser-check:
 	docker build -t distsys-browser-check tests/browser
 	docker run --rm --network none -v "$(CURDIR):/work:ro" distsys-browser-check sh tests/browser/check.sh
-
-logs-check:
-	sh tests/persistent-logs.sh
 
 e2e-check:
 	sh tests/e2e.sh

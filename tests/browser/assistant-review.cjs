@@ -20,6 +20,7 @@ const assert = require('node:assert/strict');
   await page.goto('https://review.test', {waitUntil: 'domcontentloaded'});
   await page.getByRole('button', {name: 'Добавить окно', exact: true}).first().click();
   const reception = page.locator('section').filter({has: page.getByRole('heading', {name: 'Окно приёма', exact: true})});
+  await reception.waitFor();
   assert.equal(await reception.getByLabel('Длительность одного слота, минут', {exact: true}).count(), 1);
   const review = page.locator('section').filter({has: page.getByRole('heading', {name: 'Ревью слотов', exact: true})});
   assert.equal(await review.count(), 1);
