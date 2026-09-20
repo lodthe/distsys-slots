@@ -82,7 +82,6 @@ export function createWindowEditor(onPublished) {
       { class: 'card' },
       h('div', { class: 'step' }, '02 / Укажите время'),
       h('h2', {}, 'Окно приёма'),
-      h('p', { class: 'muted small' }, 'Время по Москве.'),
       h(
         'div',
         { class: 'fields' },
@@ -189,7 +188,7 @@ export function createWindowEditor(onPublished) {
             h(
               'table',
               { class: 'review-table' },
-              h('caption', {}, 'Слоты · ' + date(item.starts_at) + ' · МСК'),
+              h('caption', {}, 'Слоты · ' + date(item.starts_at)),
               h(
                 'thead',
                 {},

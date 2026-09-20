@@ -12,7 +12,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./deploy/persistent-logs.sh:/persistent-logs.sh:ro
-      - ./logs/db:/logs
+      - db_logs:/logs
     healthcheck:
       test: [CMD-SHELL, 'pg_isready -U distsys -d distsys']
       interval: 5s
@@ -26,7 +26,6 @@ services:
     restart: unless-stopped
     entrypoint: [/bin/sh, /persistent-logs.sh, distsys]
     command: [serve]
-    group_add: ['${LOCAL_GID:-1000}']
     environment:
       HTTP_ADDR: 0.0.0.0:8083
       DATABASE_URL: postgres://distsys:${POSTGRES_PASSWORD}@db:5432/distsys?sslmode=disable
@@ -40,7 +39,7 @@ services:
     read_only: true
     volumes:
       - ./deploy/persistent-logs.sh:/persistent-logs.sh:ro
-      - ./logs/app:/logs
+      - app_logs:/logs
     tmpfs: ['/tmp:size=1m,mode=1777']
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
@@ -50,7 +49,6 @@ services:
   backup:
     image: postgres:17-alpine
     restart: unless-stopped
-    user: '${LOCAL_UID:-1000}:${LOCAL_GID:-1000}'
     entrypoint: [/bin/sh, /persistent-logs.sh, /bin/sh, /backup.sh]
     environment:
       PGHOST: db
@@ -59,9 +57,9 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - ./deploy/persistent-logs.sh:/persistent-logs.sh:ro
-      - ./logs/backup:/logs
+      - backup_logs:/logs
       - ./deploy/backup.sh:/backup.sh:ro
-      - ./backups:/backups
+      - backups:/backups
     depends_on:
       db: {condition: service_healthy}
     read_only: true
@@ -73,3 +71,7 @@ services:
       options: {max-size: 10m, max-file: '3'}
 volumes:
   postgres_data:
+  app_logs:
+  db_logs:
+  backup_logs:
+  backups:

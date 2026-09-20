@@ -7,6 +7,7 @@ COPY internal/ ./internal/
 RUN CGO_ENABLED=0 go build -trimpath -buildvcs=false -o /out/distsys ./cmd/distsys
 FROM alpine:3.22
 RUN apk add --no-cache ca-certificates tzdata && adduser -D -u 10001 app
+RUN mkdir /logs && chown app:app /logs
 COPY --from=build /out/distsys /usr/local/bin/distsys
 USER app
 EXPOSE 8083

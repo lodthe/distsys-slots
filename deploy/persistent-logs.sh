@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# The bind-mounted directory survives container replacement. Keep stdout for
+# The mounted log volume survives container replacement. Keep stdout for
 # `docker compose logs`, and capture stderr (including crashes) in the same file.
 umask 027
 log_file=$(mktemp "/logs/$(date -u +%Y%m%dT%H%M%SZ).log.XXXXXX")

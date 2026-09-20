@@ -37,8 +37,6 @@ function navigation() {
   const onboarding = state.view === 'profile' && needsName();
   $('nav').hidden = onboarding || state.role === 'admin';
   $('refresh').hidden = state.view === 'profile';
-  document.querySelector('footer').textContent =
-    'Курс «Распределённые системы»' + (state.view === 'bookings' ? '' : ' · Время по Москве');
   const tabs =
     state.role === 'admin'
       ? []
@@ -386,12 +384,7 @@ async function slotsView() {
     },
   });
   $('content').replaceChildren(
-    h(
-      'div',
-      { class: 'row between' },
-      h('h2', {}, 'Расписание защит'),
-      h('span', { class: 'muted small' }, 'Время по Москве'),
-    ),
+    h('h2', {}, 'Расписание защит'),
     field('Домашнее задание', hw),
     calendar,
     h('h3', { class: 'date-heading', 'aria-live': 'polite' }, date(selectedDay + 'T12:00:00+03:00')),
