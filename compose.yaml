@@ -1,0 +1,75 @@
+name: distsys-slots
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    entrypoint: [/bin/sh, /persistent-logs.sh, /usr/local/bin/docker-entrypoint.sh]
+    command: [postgres]
+    environment:
+      POSTGRES_DB: distsys
+      POSTGRES_USER: distsys
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deploy/persistent-logs.sh:/persistent-logs.sh:ro
+      - ./logs/db:/logs
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U distsys -d distsys']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+  app:
+    build: .
+    restart: unless-stopped
+    entrypoint: [/bin/sh, /persistent-logs.sh, distsys]
+    command: [serve]
+    group_add: ['${LOCAL_GID:-1000}']
+    environment:
+      HTTP_ADDR: 0.0.0.0:8083
+      DATABASE_URL: postgres://distsys:${POSTGRES_PASSWORD}@db:5432/distsys?sslmode=disable
+      APP_BASE_URL: ${APP_BASE_URL:?Set APP_BASE_URL in .env}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?Set TELEGRAM_BOT_TOKEN in .env}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:?Set TELEGRAM_WEBHOOK_SECRET in .env}
+      ADMIN_TELEGRAM_USERNAME: ${ADMIN_TELEGRAM_USERNAME:-}
+    ports: ['127.0.0.1:8083:8083']
+    depends_on:
+      db: {condition: service_healthy}
+    read_only: true
+    volumes:
+      - ./deploy/persistent-logs.sh:/persistent-logs.sh:ro
+      - ./logs/app:/logs
+    tmpfs: ['/tmp:size=1m,mode=1777']
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+  backup:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    user: '${LOCAL_UID:-1000}:${LOCAL_GID:-1000}'
+    entrypoint: [/bin/sh, /persistent-logs.sh, /bin/sh, /backup.sh]
+    environment:
+      PGHOST: db
+      PGDATABASE: distsys
+      PGUSER: distsys
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./deploy/persistent-logs.sh:/persistent-logs.sh:ro
+      - ./logs/backup:/logs
+      - ./deploy/backup.sh:/backup.sh:ro
+      - ./backups:/backups
+    depends_on:
+      db: {condition: service_healthy}
+    read_only: true
+    tmpfs: ['/tmp:size=1m,mode=1777']
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: '3'}
+volumes:
+  postgres_data:

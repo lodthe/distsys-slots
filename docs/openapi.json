@@ -1,0 +1,1427 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "DistSys slots API",
+    "version": "0.4.0",
+    "description": "Three roles: admin manages homework numbers and defense dates; assistants publish only on allowed dates; students provide a full name and repository username. Participant names, repository links and Telegram username are returned only to the owning assistant, never by admin calendar endpoints. Verified Telegram sessions; mutations require Origin and X-CSRF-Token. Administrators can use assistant and student endpoints without a separate assistant role; assistants can also use student endpoints. Resource ownership checks still apply. The monthly calendar exposes anonymous counts, not participant identities. Staff display uses only @username from verified Telegram data, or Ассистент if missing; never Telegram first/last names. Roles are assigned through the operator CLI."
+  },
+  "servers": [
+    {
+      "url": "https://slots.example.com/api/v1"
+    }
+  ],
+  "security": [
+    {
+      "session": []
+    }
+  ],
+  "paths": {
+    "/auth/telegram": {
+      "post": {
+        "summary": "Verify Telegram initData and issue a one-hour secure session",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "https://slots.example.com"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "csrf_token": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 expired session; 403 role/CSRF/origin; 404 inaccessible object; 409 scheduling conflict; 429 rate limit; 500 internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "init_data": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "init_data"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me": {
+      "get": {
+        "summary": "Current profile, roles and CSRF token",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    },
+                    "csrf_token": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 expired session; 403 role/CSRF/origin; 404 inaccessible object; 409 scheduling conflict; 429 rate limit; 500 internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update own profile",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "https://slots.example.com"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 expired session; 403 role/CSRF/origin; 404 inaccessible object; 409 scheduling conflict; 429 rate limit; 500 internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "full_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "repository_username": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Suffix of https://distsys.ru/hse-2026/. Whitespace and forward/back slashes are forbidden; other characters are accepted and URL-escaped."
+                  }
+                },
+                "required": [
+                  "full_name",
+                  "repository_username"
+                ],
+                "additionalProperties": false,
+                "description": "Private full name and repository username. Telegram staff identity is unchanged."
+              }
+            }
+          }
+        }
+      }
+    },
+    "/homeworks": {
+      "get": {
+        "summary": "Active homework catalog",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Homework"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 expired session; 403 role/CSRF/origin; 404 inaccessible object; 409 scheduling conflict; 429 rate limit; 500 internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/slots": {
+      "get": {
+        "summary": "Future unoccupied slots",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000,
+              "default": 0
+            }
+          },
+          {
+            "in": "query",
+            "name": "homework_id",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_from",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Inclusive date in Europe/Moscow"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Slot"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 expired session; 403 role/CSRF/origin; 404 inaccessible object; 409 scheduling conflict; 429 rate limit; 500 internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/slots/{id}": {
+      "get": {
+        "summary": "Slot details without student identities",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Slot"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 expired session; 403 role/CSRF/origin; 404 inaccessible object; 409 scheduling conflict; 429 rate limit; 500 internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/slots/{id}/bookings": {
+      "post": {
+        "summary": "Book for current student; repeat returns existing booking",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "https://slots.example.com"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "booking_id": {
+                      "type": "integer",
+                      "format": "int64"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 expired session; 403 role/CSRF/origin; 404 inaccessible object; 409 scheduling conflict; 429 rate limit; 500 internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/me/bookings": {
+      "get": {
+        "summary": "Own bookings and cancellation history",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Booking"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 expired session; 403 role/CSRF/origin; 404 inaccessible object; 409 scheduling conflict; 429 rate limit; 500 internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/bookings/{id}/cancel": {
+      "post": {
+        "summary": "Cancel own future booking",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "https://slots.example.com"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 expired session; 403 role/CSRF/origin; 404 inaccessible object; 409 scheduling conflict; 429 rate limit; 500 internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistant/windows": {
+      "get": {
+        "summary": "All own windows, newest first",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Window"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 expired session; 403 role/CSRF/origin; 404 inaccessible object; 409 scheduling conflict; 429 rate limit; 500 internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "All own past, future and cancelled windows in one response, ordered by starts_at DESC, id DESC. No pagination or date filters."
+      },
+      "post": {
+        "summary": "Publish one window (assistant)",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "https://slots.example.com"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "id"
+                  ],
+                  "properties": {
+                    "id": {
+                      "type": "integer",
+                      "format": "int64"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 expired session; 403 role/CSRF/origin; 404 inaccessible object; 409 scheduling conflict; 429 rate limit; 500 internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WindowInput"
+              }
+            }
+          }
+        },
+        "description": "Publishes one window and its slots atomically. Overlapping windows are allowed. Future times, allowed defense dates, slot exclusions and idempotency are checked. Repeating the same request with the same Idempotency-Key returns the original window ID."
+      }
+    },
+    "/assistant/windows/{id}": {
+      "get": {
+        "summary": "Own window with participants (assistant)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Window"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 expired session; 403 role/CSRF/origin; 404 inaccessible object; 409 scheduling conflict; 429 rate limit; 500 internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistant/windows/{id}/cancel": {
+      "post": {
+        "summary": "Cancel own future resource; reason optional even if occupied",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "https://slots.example.com"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 expired session; 403 role/CSRF/origin; 404 inaccessible object; 409 scheduling conflict; 429 rate limit; 500 internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                },
+                "description": "Reason is optional, including cancellation of confirmed bookings. If provided, it is saved and included in student notifications."
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistant/slots/{id}/cancel": {
+      "post": {
+        "summary": "Cancel own future resource; reason optional even if occupied",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "https://slots.example.com"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 expired session; 403 role/CSRF/origin; 404 inaccessible object; 409 scheduling conflict; 429 rate limit; 500 internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                },
+                "description": "Reason is optional, including cancellation of confirmed bookings. If provided, it is saved and included in student notifications."
+              }
+            }
+          }
+        }
+      }
+    },
+    "/public/config": {
+      "get": {
+        "summary": "Public bot username for launch page",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bot_username": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 expired session; 403 role/CSRF/origin; 404 inaccessible object; 409 scheduling conflict; 429 rate limit; 500 internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/admin/homeworks": {
+      "post": {
+        "summary": "Create unique homework number and defense dates (admin only)",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer",
+                      "format": "int64"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 authentication; 403 wrong role; 404 missing object; 409 conflict (duplicate homework number).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HomeworkInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/homeworks/{id}": {
+      "patch": {
+        "summary": "Update homework number and allowed dates without changing existing windows (admin only)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer",
+                      "format": "int64"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 authentication; 403 wrong role; 404 missing object; 409 conflict (duplicate homework number).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HomeworkInput"
+              }
+            }
+          }
+        },
+        "description": "Replace the homework number and allowed dates for new publications. Existing windows, slots and bookings remain unchanged when dates are removed."
+      }
+    },
+    "/calendar": {
+      "get": {
+        "summary": "Monthly anonymous counts grouped by Moscow day, homework and assistant; future open slots only, including fully booked groups. No pagination.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "month",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{4}-[0-9]{2}$"
+            },
+            "description": "Defaults to the current Moscow month"
+          },
+          {
+            "in": "query",
+            "name": "homework_id",
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Monthly calendar entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CalendarEntry"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 expired session; 403 role/CSRF/origin; 404 inaccessible object; 409 scheduling conflict; 429 rate limit; 500 internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/assistant/windows/{id}/comment": {
+      "patch": {
+        "summary": "Update or clear the comment of an owned window",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-CSRF-Token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Origin",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "https://slots.example.com"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "comment": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "400 invalid input; 401 expired session; 403 role/CSRF/origin; 404 inaccessible object; 409 scheduling conflict; 429 rate limit; 500 internal error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "comment"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "comment": {
+                    "type": "string",
+                    "maxLength": 2000
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "distsys_session"
+      }
+    },
+    "schemas": {
+      "WindowInput": {
+        "type": "object",
+        "properties": {
+          "homework_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "slot_minutes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 180
+          },
+          "excluded_slot_indices": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1439
+            },
+            "uniqueItems": true,
+            "maxItems": 1439,
+            "description": "Optional zero-based indices of generated full slots to omit atomically. Each index must be less than floor(window minutes / slot_minutes); at least one slot must remain. Omitted/empty means all slots. Other start times do not shift."
+          },
+          "comment": {
+            "type": "string",
+            "maxLength": 2000,
+            "default": "",
+            "description": "Optional comment shared by the window slots. Included only in the booked student reminder 5 minutes before the slot; the current value is read at delivery."
+          }
+        },
+        "required": [
+          "homework_id",
+          "starts_at",
+          "ends_at",
+          "slot_minutes"
+        ],
+        "additionalProperties": false
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": "string"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "telegram_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "full_name": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          },
+          "assistant": {
+            "type": "boolean",
+            "description": "Explicit assistant role. Assistant access is allowed when assistant OR admin is true."
+          },
+          "admin": {
+            "type": "boolean"
+          },
+          "repository_username": {
+            "type": "string"
+          },
+          "repository_url": {
+            "type": "string",
+            "description": "Fixed repository base plus an escaped username; empty until supplied."
+          }
+        }
+      },
+      "Homework": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/HomeworkInput"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "title": {
+                "type": "string",
+                "example": "ДЗ №1"
+              },
+              "window_count": {
+                "type": "integer"
+              }
+            }
+          }
+        ]
+      },
+      "Slot": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "window_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string"
+          },
+          "window_status": {
+            "type": "string"
+          },
+          "homework_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "homework_title": {
+            "type": "string"
+          },
+          "assistant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "assistant_name": {
+            "type": "string"
+          },
+          "assistant_username": {
+            "type": "string"
+          },
+          "booked": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Window": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/WindowInput"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "assistant_id": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "status": {
+                "type": "string"
+              },
+              "cancellation_reason": {
+                "type": "string"
+              },
+              "homework_title": {
+                "type": "string"
+              },
+              "slot_count": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "booking_count": {
+                "type": "integer",
+                "format": "int64"
+              },
+              "slots": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "description": "Slot fields plus booking_id, full_name, username, repository_username and repository_url. Only the owning assistant can see participants. No student_group or Telegram numeric ID."
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Booking": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "slot_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "cancelled_by_student",
+              "cancelled_by_assistant"
+            ]
+          },
+          "cancellation_reason": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "homework_title": {
+            "type": "string"
+          },
+          "assistant_name": {
+            "type": "string"
+          },
+          "assistant_username": {
+            "type": "string"
+          }
+        }
+      },
+      "HomeworkInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "number",
+          "defense_dates"
+        ],
+        "properties": {
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "defense_dates": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 366,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        }
+      },
+      "CalendarEntry": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date"
+          },
+          "homework_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "homework_title": {
+            "type": "string"
+          },
+          "assistant_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "assistant_name": {
+            "type": "string"
+          },
+          "free_slots": {
+            "type": "integer"
+          },
+          "total_slots": {
+            "type": "integer"
+          },
+          "first_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,34 @@
+name: checks
+on: [push, pull_request]
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: distsys
+          POSTGRES_PASSWORD: integration-only
+          POSTGRES_DB: distsys_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U distsys -d distsys_test"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://distsys:integration-only@localhost:5432/distsys_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0, persist-credentials: false}
+      - uses: actions/setup-go@v5
+        with: {go-version-file: go.mod, cache: true}
+      - run: make check
+      - run: make security-check
+      - run: make browser-check
+      - run: make logs-check
+      - run: make e2e-check

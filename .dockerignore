@@ -1,0 +1,11 @@
+# Only application sources are needed by the root Dockerfile.
+**
+!go.mod
+!go.sum
+!cmd/**/*.go
+!internal/**/*.go
+!internal/app/migrations/*.sql
+!internal/app/web/*.html
+!internal/app/web/*.js
+!internal/app/web/*.css
+**/*_test.go

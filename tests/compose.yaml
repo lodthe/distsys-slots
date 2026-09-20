@@ -1,0 +1,43 @@
+# Disposable database and fake Telegram credentials; never loads the root .env.
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: distsys_test
+      POSTGRES_USER: distsys
+      POSTGRES_PASSWORD: integration-only
+    tmpfs: [/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U distsys -d distsys_test']
+      interval: 1s
+      timeout: 3s
+      retries: 30
+  app:
+    build:
+      context: ..
+    environment:
+      HTTP_ADDR: 0.0.0.0:8083
+      DATABASE_URL: postgres://distsys:integration-only@db:5432/distsys_test?sslmode=disable
+      APP_BASE_URL: https://distsys-e2e.local
+      TELEGRAM_BOT_TOKEN: e2e-test-token
+      TELEGRAM_WEBHOOK_SECRET: e2e-webhook-secret-for-isolated-tests
+    depends_on:
+      db: {condition: service_healthy}
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:8083/readyz']
+      interval: 1s
+      timeout: 3s
+      retries: 30
+  browser:
+    build: browser
+    environment:
+      E2E_BACKEND_URL: http://app:8083
+    volumes: ['..:/work:ro']
+    command: [node, tests/browser/e2e.cjs]
+    profiles: [test]
+networks:
+  default:
+    internal: true
